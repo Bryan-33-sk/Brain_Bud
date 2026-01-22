@@ -22,7 +22,8 @@ class AchievementService {
     await _loadAchievements();
     _initialized = true;
 
-    debugLog.info('AchievementService', 'Initialized ${_achievements.length} achievements');
+    debugLog.info('AchievementService',
+        'Initialized ${_achievements.length} achievements');
   }
 
   /// Get all achievements
@@ -61,10 +62,11 @@ class AchievementService {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
     final lastCheckDate = prefs.getString('last_achievement_check_date');
-    
+
     // Fix #2: Prevent multiple checks per day
     if (lastCheckDate == today) {
-      debugLog.info('AchievementService', 'Achievements already checked today, skipping');
+      debugLog.info(
+          'AchievementService', 'Achievements already checked today, skipping');
       return;
     }
 
@@ -89,22 +91,23 @@ class AchievementService {
 
     // Check if it's end of day (after 11 PM) or checking yesterday's data
     final now = DateTime.now();
-    final isEndOfDay = now.hour >= 23 || _isCheckingYesterday(lastCheckDate, today);
+    final isEndOfDay =
+        now.hour >= 23 || _isCheckingYesterday(lastCheckDate, today);
 
     // Check daily achievements (only at end of day)
     if (isEndOfDay) {
       await _checkDailyAchievements(isZero, isHappy, totalMinutes);
     }
-    
+
     // Check streak achievements
     await _checkStreakAchievements(isHappy, isZero, isNeutral, socialMinutes);
-    
+
     // Check milestone achievements
     await _checkMilestoneAchievements(isHappy, isZero, isNeutral);
-    
+
     // Check reduction achievements
     await _checkReductionAchievements(socialMinutes);
-    
+
     // Check special achievements
     await _checkSpecialAchievements(stats, socialMinutes);
 
@@ -128,10 +131,11 @@ class AchievementService {
   }
 
   /// Check daily achievements (only called at end of day)
-  Future<void> _checkDailyAchievements(bool isZero, bool isHappy, int totalMinutes) async {
+  Future<void> _checkDailyAchievements(
+      bool isZero, bool isHappy, int totalMinutes) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Fix #1: Only check daily achievements once per day at end of day
     final dailyCheckKey = 'daily_achievements_checked_$today';
     if (prefs.getBool(dailyCheckKey) == true) {
@@ -161,7 +165,8 @@ class AchievementService {
       if (!hasSocialBefore9AM && isZero) {
         await _tryUnlockAchievement('early_bird');
       }
-      await prefs.setString('early_bird_$today', hasSocialBefore9AM ? 'false' : 'true');
+      await prefs.setString(
+          'early_bird_$today', hasSocialBefore9AM ? 'false' : 'true');
     }
 
     // Mindful Morning - Less than 10 minutes before noon (Fix #4)
@@ -171,7 +176,8 @@ class AchievementService {
       if (morningMinutes < 10) {
         await _tryUnlockAchievement('mindful_morning');
       }
-      await prefs.setString('mindful_morning_$today', morningMinutes.toString());
+      await prefs.setString(
+          'mindful_morning_$today', morningMinutes.toString());
     }
 
     // Mark daily achievements as checked for today
@@ -182,7 +188,7 @@ class AchievementService {
   Future<bool> _hasSocialMediaBeforeTime(int hour, int minute) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Get stored session data for today
     final sessionsJson = prefs.getString('social_sessions_$today');
     if (sessionsJson == null) {
@@ -190,13 +196,15 @@ class AchievementService {
       // For now, return false (no usage before time)
       return false;
     }
-    
+
     try {
       final List<dynamic> sessions = jsonDecode(sessionsJson);
-      final cutoffTime = DateTime.now().copyWith(hour: hour, minute: minute, second: 0, millisecond: 0);
-      
+      final cutoffTime = DateTime.now()
+          .copyWith(hour: hour, minute: minute, second: 0, millisecond: 0);
+
       for (final session in sessions) {
-        final startTime = DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
+        final startTime =
+            DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
         if (startTime.isBefore(cutoffTime)) {
           return true;
         }
@@ -212,26 +220,30 @@ class AchievementService {
   Future<int> _getSocialMediaMinutesBeforeTime(int hour, int minute) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Get stored session data for today
     final sessionsJson = prefs.getString('social_sessions_$today');
     if (sessionsJson == null) {
       return 0;
     }
-    
+
     try {
       final List<dynamic> sessions = jsonDecode(sessionsJson);
-      final cutoffTime = DateTime.now().copyWith(hour: hour, minute: minute, second: 0, millisecond: 0);
+      final cutoffTime = DateTime.now()
+          .copyWith(hour: hour, minute: minute, second: 0, millisecond: 0);
       int totalMinutes = 0;
-      
+
       for (final session in sessions) {
-        final startTime = DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
-        final endTime = DateTime.fromMillisecondsSinceEpoch(session['endTime'] as int);
-        
+        final startTime =
+            DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
+        final endTime =
+            DateTime.fromMillisecondsSinceEpoch(session['endTime'] as int);
+
         // Only count sessions that started before cutoff
         if (startTime.isBefore(cutoffTime)) {
           // Clip end time to cutoff if session extends past it
-          final effectiveEndTime = endTime.isBefore(cutoffTime) ? endTime : cutoffTime;
+          final effectiveEndTime =
+              endTime.isBefore(cutoffTime) ? endTime : cutoffTime;
           final duration = effectiveEndTime.difference(startTime);
           totalMinutes += duration.inMinutes;
         }
@@ -244,11 +256,12 @@ class AchievementService {
   }
 
   /// Check streak achievements
-  Future<void> _checkStreakAchievements(bool isHappy, bool isZero, bool isNeutral, int socialMinutes) async {
+  Future<void> _checkStreakAchievements(
+      bool isHappy, bool isZero, bool isNeutral, int socialMinutes) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
     final lastCheckDate = prefs.getString('last_streak_check_date');
-    
+
     // Don't double-count if already checked today
     if (lastCheckDate == today) return;
 
@@ -262,10 +275,11 @@ class AchievementService {
         // Reset streak
         await prefs.setInt('happy_streak', 1);
       }
-      
+
       // Check streak achievements
       final newStreak = prefs.getInt('happy_streak') ?? 0;
-      if (newStreak >= 3) await _updateProgress('consistency_champion', newStreak);
+      if (newStreak >= 3)
+        await _updateProgress('consistency_champion', newStreak);
       if (newStreak >= 7) await _updateProgress('week_warrior', newStreak);
       if (newStreak >= 30) await _updateProgress('month_master', newStreak);
     } else {
@@ -280,9 +294,10 @@ class AchievementService {
       } else {
         await prefs.setInt('zero_streak', 1);
       }
-      
+
       final newZeroStreak = prefs.getInt('zero_streak') ?? 0;
-      if (newZeroStreak >= 7) await _updateProgress('perfect_week', newZeroStreak);
+      if (newZeroStreak >= 7)
+        await _updateProgress('perfect_week', newZeroStreak);
     } else {
       await prefs.setInt('zero_streak', 0);
     }
@@ -295,9 +310,10 @@ class AchievementService {
       } else {
         await prefs.setInt('sabbatical_streak', 1);
       }
-      
+
       final newSabbaticalStreak = prefs.getInt('sabbatical_streak') ?? 0;
-      if (newSabbaticalStreak >= 14) await _updateProgress('social_sabbatical', newSabbaticalStreak);
+      if (newSabbaticalStreak >= 14)
+        await _updateProgress('social_sabbatical', newSabbaticalStreak);
     } else {
       await prefs.setInt('sabbatical_streak', 0);
     }
@@ -310,9 +326,10 @@ class AchievementService {
       } else {
         await prefs.setInt('neutral_streak', 1);
       }
-      
+
       final newNeutralStreak = prefs.getInt('neutral_streak') ?? 0;
-      if (newNeutralStreak >= 5) await _updateProgress('balance_achiever', newNeutralStreak);
+      if (newNeutralStreak >= 5)
+        await _updateProgress('balance_achiever', newNeutralStreak);
     } else {
       await prefs.setInt('neutral_streak', 0);
     }
@@ -321,7 +338,8 @@ class AchievementService {
   }
 
   /// Check milestone achievements
-  Future<void> _checkMilestoneAchievements(bool isHappy, bool isZero, bool isNeutral) async {
+  Future<void> _checkMilestoneAchievements(
+      bool isHappy, bool isZero, bool isNeutral) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
 
@@ -350,27 +368,27 @@ class AchievementService {
   /// Check reduction achievements
   Future<void> _checkReductionAchievements(int socialMinutes) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // Track daily social media time for comparison
     final today = DateTime.now().toIso8601String().split('T')[0];
     final weekData = prefs.getStringList('social_media_week') ?? [];
-    
+
     // Check if today's data already added
     final todayEntry = '$today:';
     final hasToday = weekData.any((entry) => entry.startsWith(todayEntry));
-    
+
     if (!hasToday) {
       // Add today's data
       weekData.add('$today:$socialMinutes');
-      
+
       // Keep only last 7 days
       if (weekData.length > 7) {
         weekData.removeAt(0);
       }
-      
+
       await prefs.setStringList('social_media_week', weekData);
     }
-    
+
     // Fix #3: Social Minimalist - track incremental progress (1-7 days)
     if (weekData.length >= 7) {
       // Count how many days qualify (< 15 min)
@@ -381,13 +399,13 @@ class AchievementService {
           qualifyingDays++;
         }
       }
-      
+
       // Update progress incrementally
       if (qualifyingDays > 0) {
         await _updateProgress('social_minimalist', qualifyingDays);
       }
     }
-    
+
     // Calculate baseline for reduction achievements (Fix #7)
     final baselineSet = prefs.getBool('baseline_average_set') ?? false;
     if (!baselineSet && weekData.length >= 7) {
@@ -399,9 +417,10 @@ class AchievementService {
       final baselineAverage = total ~/ 7;
       await prefs.setInt('baseline_average', baselineAverage);
       await prefs.setBool('baseline_average_set', true);
-      debugLog.info('AchievementService', 'Baseline average set: $baselineAverage minutes');
+      debugLog.info('AchievementService',
+          'Baseline average set: $baselineAverage minutes');
     }
-    
+
     // Check reduction achievements (Fix #7)
     if (baselineSet && weekData.length >= 7) {
       final baselineAverage = prefs.getInt('baseline_average') ?? 0;
@@ -411,11 +430,11 @@ class AchievementService {
           return sum + minutes;
         });
         final currentAverage = total ~/ 7;
-        
+
         // Track qualifying days for reduction achievements
         int reduction50Days = prefs.getInt('reduction_50_days') ?? 0;
         int reduction75Days = prefs.getInt('reduction_75_days') ?? 0;
-        
+
         // Check if current week qualifies
         if (currentAverage <= baselineAverage * 0.5) {
           // 50% reduction achieved this week
@@ -428,7 +447,7 @@ class AchievementService {
           // Reset if week doesn't qualify
           await prefs.setInt('reduction_50_days', 0);
         }
-        
+
         if (currentAverage <= baselineAverage * 0.25) {
           // 75% reduction achieved this week
           if (reduction75Days < 7) {
@@ -445,17 +464,19 @@ class AchievementService {
   }
 
   /// Check special achievements
-  Future<void> _checkSpecialAchievements(List<AppUsageInfo> stats, int socialMinutes) async {
+  Future<void> _checkSpecialAchievements(
+      List<AppUsageInfo> stats, int socialMinutes) async {
     final now = DateTime.now();
-    final isWeekend = now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
+    final isWeekend =
+        now.weekday == DateTime.saturday || now.weekday == DateTime.sunday;
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Weekend Warrior
     if (isWeekend && socialMinutes < 30) {
       final weekendKey = 'weekend_${now.year}_${now.month}_${now.day ~/ 7}';
       final weekendDays = prefs.getInt(weekendKey) ?? 0;
-      
+
       if (weekendDays == 0) {
         await prefs.setInt(weekendKey, 1);
       } else if (weekendDays == 1 && now.weekday == DateTime.sunday) {
@@ -464,9 +485,9 @@ class AchievementService {
     }
 
     // Night Owl - No social media after 10 PM for a week (Fix #4)
-    final nightOwlKey = 'night_owl_week';
+    const nightOwlKey = 'night_owl_week';
     final nightOwlData = prefs.getStringList(nightOwlKey) ?? [];
-    
+
     // Check if today qualifies (no social media after 10 PM)
     final hasSocialAfter10PM = await _hasSocialMediaAfterTime(22, 0);
     if (!hasSocialAfter10PM) {
@@ -478,7 +499,7 @@ class AchievementService {
           nightOwlData.removeAt(0);
         }
         await prefs.setStringList(nightOwlKey, nightOwlData);
-        
+
         // Check if 7 consecutive days achieved
         if (nightOwlData.length >= 7) {
           await _updateProgress('night_owl', nightOwlData.length);
@@ -490,9 +511,9 @@ class AchievementService {
     }
 
     // Break Master - No 1+ hour continuous sessions (Fix #6)
-    final breakMasterKey = 'break_master_week';
+    const breakMasterKey = 'break_master_week';
     final breakMasterData = prefs.getStringList(breakMasterKey) ?? [];
-    
+
     // Check if today qualifies (no sessions >= 60 minutes)
     final hasLongSession = await _hasLongSocialMediaSession(60);
     if (!hasLongSession) {
@@ -504,7 +525,7 @@ class AchievementService {
           breakMasterData.removeAt(0);
         }
         await prefs.setStringList(breakMasterKey, breakMasterData);
-        
+
         // Check if 7 consecutive days achieved
         if (breakMasterData.length >= 7) {
           await _updateProgress('break_master', breakMasterData.length);
@@ -520,20 +541,23 @@ class AchievementService {
   Future<bool> _hasSocialMediaAfterTime(int hour, int minute) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Get stored session data for today
     final sessionsJson = prefs.getString('social_sessions_$today');
     if (sessionsJson == null) {
       return false;
     }
-    
+
     try {
       final List<dynamic> sessions = jsonDecode(sessionsJson);
-      final cutoffTime = DateTime.now().copyWith(hour: hour, minute: minute, second: 0, millisecond: 0);
-      
+      final cutoffTime = DateTime.now()
+          .copyWith(hour: hour, minute: minute, second: 0, millisecond: 0);
+
       for (final session in sessions) {
-        final startTime = DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
-        if (startTime.isAfter(cutoffTime) || startTime.isAtSameMomentAs(cutoffTime)) {
+        final startTime =
+            DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
+        if (startTime.isAfter(cutoffTime) ||
+            startTime.isAtSameMomentAs(cutoffTime)) {
           return true;
         }
       }
@@ -548,21 +572,23 @@ class AchievementService {
   Future<bool> _hasLongSocialMediaSession(int maxMinutes) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Get stored session data for today
     final sessionsJson = prefs.getString('social_sessions_$today');
     if (sessionsJson == null) {
       return false;
     }
-    
+
     try {
       final List<dynamic> sessions = jsonDecode(sessionsJson);
-      
+
       for (final session in sessions) {
-        final startTime = DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
-        final endTime = DateTime.fromMillisecondsSinceEpoch(session['endTime'] as int);
+        final startTime =
+            DateTime.fromMillisecondsSinceEpoch(session['startTime'] as int);
+        final endTime =
+            DateTime.fromMillisecondsSinceEpoch(session['endTime'] as int);
         final duration = endTime.difference(startTime);
-        
+
         if (duration.inMinutes >= maxMinutes) {
           return true;
         }
@@ -579,18 +605,21 @@ class AchievementService {
   Future<void> storeSocialMediaSessions(List<AppUsageInfo> stats) async {
     final prefs = await SharedPreferences.getInstance();
     final today = DateTime.now().toIso8601String().split('T')[0];
-    
+
     // Extract session data from stats
     // Note: This is a simplified version - ideally the native side would provide session-level data
     final List<Map<String, dynamic>> sessions = [];
-    
+
     for (final app in stats) {
-      if (app.isSocialMediaApp() && !app.isSystemApp && app.totalTimeInForeground > 0) {
+      if (app.isSocialMediaApp() &&
+          !app.isSystemApp &&
+          app.totalTimeInForeground > 0) {
         // Estimate session: use lastTimeUsed as end, calculate start
         // This is approximate - real implementation would track actual RESUMED/PAUSED events
         final endTime = DateTime.fromMillisecondsSinceEpoch(app.lastTimeUsed);
-        final startTime = endTime.subtract(Duration(milliseconds: app.totalTimeInForeground));
-        
+        final startTime =
+            endTime.subtract(Duration(milliseconds: app.totalTimeInForeground));
+
         sessions.add({
           'packageName': app.packageName,
           'appName': app.appName,
@@ -600,10 +629,11 @@ class AchievementService {
         });
       }
     }
-    
+
     // Store sessions for today
     await prefs.setString('social_sessions_$today', jsonEncode(sessions));
-    debugLog.info('AchievementService', 'Stored ${sessions.length} social media sessions for $today');
+    debugLog.info('AchievementService',
+        'Stored ${sessions.length} social media sessions for $today');
   }
 
   /// Try to unlock an achievement
@@ -623,7 +653,7 @@ class AchievementService {
     // Show notification
     final notificationService = NotificationService();
     await notificationService.initialize();
-    
+
     // Create achievement unlock notification
     await _showAchievementNotification(achievement);
 
@@ -677,15 +707,15 @@ class AchievementService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final achievementsJson = prefs.getString('achievements');
-      
+
       if (achievementsJson == null) return;
 
       final Map<String, dynamic> achievementsMap = jsonDecode(achievementsJson);
-      
+
       for (int i = 0; i < _achievements.length; i++) {
         final achievement = _achievements[i];
         final stored = achievementsMap[achievement.id];
-        
+
         if (stored != null) {
           _achievements[i] = Achievement.fromMap(stored, achievement);
         }
@@ -700,11 +730,11 @@ class AchievementService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final Map<String, dynamic> achievementsMap = {};
-      
+
       for (final achievement in _achievements) {
         achievementsMap[achievement.id] = achievement.toMap();
       }
-      
+
       await prefs.setString('achievements', jsonEncode(achievementsMap));
     } catch (e) {
       debugLog.error('AchievementService', 'Failed to save achievements: $e');
@@ -716,7 +746,7 @@ class AchievementService {
     final unlocked = getUnlockedAchievements().length;
     final total = _achievements.length;
     final inProgress = getInProgressAchievements().length;
-    
+
     return {
       'unlocked': unlocked,
       'total': total,
@@ -726,4 +756,3 @@ class AchievementService {
     };
   }
 }
-

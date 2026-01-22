@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Brain Bud</string>
+    <string name="accessibility_service_label">Brain Bud Screen Time Helper</string>
+    <string name="accessibility_service_description">Brain Bud uses this permission to detect when you open social media apps and show a gentle intervention to help you be more mindful of your screen time. We do not collect, store, or share any data about what you view or do in other apps.</string>
+</resources>
+

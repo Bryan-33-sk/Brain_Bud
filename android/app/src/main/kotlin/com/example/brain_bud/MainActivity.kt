@@ -1,14 +1,19 @@
 package com.example.brain_bud
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -18,10 +23,12 @@ private const val TAG = "BrainBudUsage"
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.brainbud.usage_stats/channel"
+    private val INTERVENTION_CHANNEL = "com.brainbud.intervention/channel"
     
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
+        // Usage stats channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getUsageStats" -> {
@@ -57,6 +64,97 @@ class MainActivity: FlutterActivity() {
                 else -> {
                     result.notImplemented()
                 }
+            }
+        }
+        
+        // Intervention channel
+        val interventionChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INTERVENTION_CHANNEL)
+        
+        // Set MethodChannel reference in BOTH services for event push
+        AppMonitorService.methodChannel = interventionChannel
+        AppAccessibilityService.methodChannel = interventionChannel
+        
+        interventionChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "hasOverlayPermission" -> {
+                    result.success(hasOverlayPermission())
+                }
+                "requestOverlayPermission" -> {
+                    requestOverlayPermission()
+                    result.success(true)
+                }
+                // Accessibility Service methods
+                "hasAccessibilityPermission" -> {
+                    result.success(isAccessibilityServiceEnabled())
+                }
+                "requestAccessibilityPermission" -> {
+                    openAccessibilitySettings()
+                    result.success(true)
+                }
+                "isAccessibilityServiceRunning" -> {
+                    result.success(AppAccessibilityService.isServiceRunning())
+                }
+                // Battery Optimization methods
+                "isBatteryOptimizationDisabled" -> {
+                    result.success(isBatteryOptimizationDisabled())
+                }
+                "requestBatteryOptimizationExemption" -> {
+                    requestBatteryOptimizationExemption()
+                    result.success(true)
+                }
+                // Monitoring methods (fallback polling service)
+                "startMonitoring" -> {
+                    try {
+                        // Ensure MethodChannel is set before starting service
+                        AppMonitorService.methodChannel = interventionChannel
+                        
+                        // If accessibility service is enabled, it handles everything
+                        // Otherwise, start the polling fallback service
+                        if (!isAccessibilityServiceEnabled()) {
+                            AppMonitorService.startService(this@MainActivity)
+                            Log.d(TAG, "Intervention monitoring started (polling fallback)")
+                        } else {
+                            Log.d(TAG, "Accessibility service enabled, no polling needed")
+                        }
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to start monitoring service", e)
+                        result.error("ERROR", "Failed to start monitoring: ${e.message}", null)
+                    }
+                }
+                "stopMonitoring" -> {
+                    try {
+                        AppMonitorService.stopService(this@MainActivity)
+                        Log.d(TAG, "Intervention monitoring stopped")
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to stop monitoring service", e)
+                        result.error("ERROR", "Failed to stop monitoring: ${e.message}", null)
+                    }
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
+    }
+    
+    private fun hasOverlayPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+    }
+    
+    private fun requestOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:$packageName")
+                )
+                startActivity(intent)
             }
         }
     }
@@ -591,4 +689,78 @@ class MainActivity: FlutterActivity() {
         val lastUsed: Long,
         val launchCount: Int
     )
+    
+    // ==================== Accessibility Service Methods ====================
+    
+    /**
+     * Check if our accessibility service is enabled
+     */
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val accessibilityManager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabledServices = accessibilityManager.getEnabledAccessibilityServiceList(
+            AccessibilityServiceInfo.FEEDBACK_GENERIC
+        )
+        
+        val componentName = ComponentName(this, AppAccessibilityService::class.java)
+        
+        for (service in enabledServices) {
+            val enabledServiceComponent = service.resolveInfo.serviceInfo
+            if (enabledServiceComponent.packageName == componentName.packageName &&
+                enabledServiceComponent.name == componentName.className) {
+                return true
+            }
+        }
+        return false
+    }
+    
+    /**
+     * Open accessibility settings for user to enable our service
+     */
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+    }
+    
+    // ==================== Battery Optimization Methods ====================
+    
+    /**
+     * Check if our app is exempt from battery optimization
+     */
+    private fun isBatteryOptimizationDisabled(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            powerManager.isIgnoringBatteryOptimizations(packageName)
+        } else {
+            true // Not applicable before Android M
+        }
+    }
+    
+    /**
+     * Request battery optimization exemption
+     * This shows a system dialog asking user to exempt the app
+     */
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    // Direct request (shows system dialog)
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    // Fallback: Open battery optimization settings
+                    Log.w(TAG, "Direct battery exemption request failed, opening settings", e)
+                    try {
+                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        startActivity(intent)
+                    } catch (e2: Exception) {
+                        Log.e(TAG, "Failed to open battery settings", e2)
+                    }
+                }
+            }
+        }
+    }
 }

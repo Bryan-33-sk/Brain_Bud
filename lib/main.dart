@@ -9,31 +9,47 @@ import 'services/achievement_service.dart';
 import 'screens/debug_log_screen.dart';
 import 'screens/category_breakdown_screen.dart';
 import 'screens/achievements_screen.dart';
+import 'services/app_intervention_service.dart';
+import 'widgets/intervention_overlay.dart';
+import 'screens/permission_debug_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize notifications
   final notificationService = NotificationService();
   await notificationService.initialize();
-  
+
   // Initialize background monitoring
   final monitorService = UsageMonitorService();
   await monitorService.initialize();
-  
+
   // Initialize achievements
   final achievementService = AchievementService();
   await achievementService.initialize();
-  
+
+  // Initialize intervention service
+  final interventionService = AppInterventionService();
+  await interventionService.initialize();
+
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  // Global navigator key for accessing context from services
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   @override
   Widget build(BuildContext context) {
+    // Set context provider for intervention service
+    final interventionService = AppInterventionService();
+    interventionService.setContextProvider(() => navigatorKey.currentContext);
+
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Brain Bud',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -57,9 +73,9 @@ class MyApp extends StatelessWidget {
 
 /// Brain Bud mood based on social media usage
 enum BrainBudMood {
-  happy,    // Low social media usage (< 30 min)
-  neutral,  // Moderate usage (30 min - 2 hours)
-  sad,      // High usage (> 2 hours)
+  happy, // Low social media usage (< 30 min)
+  neutral, // Moderate usage (30 min - 2 hours)
+  sad, // High usage (> 2 hours)
 }
 
 /// The Brain Bud character widget with expressive face
@@ -164,15 +180,19 @@ class BrainBudPainter extends CustomPainter {
       case BrainBudMood.happy:
         return (const Color(0xFF10B981), const Color(0xFF6EE7B7)); // Green
       case BrainBudMood.neutral:
-        return (const Color(0xFFF59E0B), const Color(0xFFFCD34D)); // Yellow/Amber
+        return (
+          const Color(0xFFF59E0B),
+          const Color(0xFFFCD34D)
+        ); // Yellow/Amber
       case BrainBudMood.sad:
         return (const Color(0xFFEF4444), const Color(0xFFFCA5A5)); // Red
     }
   }
 
-  void _drawBrainShape(Canvas canvas, Offset center, double radius, Paint paint) {
+  void _drawBrainShape(
+      Canvas canvas, Offset center, double radius, Paint paint) {
     final path = Path();
-    
+
     // Create a brain-like blob shape
     for (int i = 0; i <= 360; i += 5) {
       final angle = i * math.pi / 180;
@@ -181,7 +201,7 @@ class BrainBudPainter extends CustomPainter {
       final r = radius + waveOffset;
       final x = center.dx + r * math.cos(angle);
       final y = center.dy + r * math.sin(angle);
-      
+
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -219,10 +239,10 @@ class BrainBudPainter extends CustomPainter {
 
     // Pupils - position based on mood
     final pupilPaint = Paint()..color = const Color(0xFF1F2937);
-    final pupilOffset = mood == BrainBudMood.sad 
+    final pupilOffset = mood == BrainBudMood.sad
         ? const Offset(0, 3) // Look down when sad
         : const Offset(0, 0);
-    
+
     canvas.drawCircle(
       Offset(center.dx - eyeOffsetX, center.dy - eyeOffsetY) + pupilOffset,
       eyeRadius * 0.7,
@@ -237,12 +257,14 @@ class BrainBudPainter extends CustomPainter {
     // Eye shine
     final shinePaint = Paint()..color = Colors.white;
     canvas.drawCircle(
-      Offset(center.dx - eyeOffsetX - 2, center.dy - eyeOffsetY - 3) + pupilOffset,
+      Offset(center.dx - eyeOffsetX - 2, center.dy - eyeOffsetY - 3) +
+          pupilOffset,
       eyeRadius * 0.25,
       shinePaint,
     );
     canvas.drawCircle(
-      Offset(center.dx + eyeOffsetX - 2, center.dy - eyeOffsetY - 3) + pupilOffset,
+      Offset(center.dx + eyeOffsetX - 2, center.dy - eyeOffsetY - 3) +
+          pupilOffset,
       eyeRadius * 0.25,
       shinePaint,
     );
@@ -276,7 +298,7 @@ class BrainBudPainter extends CustomPainter {
     }
   }
 
-  void _drawEyebrows(Canvas canvas, Offset center, double radius, 
+  void _drawEyebrows(Canvas canvas, Offset center, double radius,
       double eyeOffsetX, double eyeOffsetY) {
     final browPaint = Paint()
       ..color = const Color(0xFF1F2937)
@@ -292,14 +314,18 @@ class BrainBudPainter extends CustomPainter {
         final leftBrow = Path()
           ..moveTo(center.dx - eyeOffsetX - radius * 0.12, browY + 2)
           ..quadraticBezierTo(
-            center.dx - eyeOffsetX, browY - 5,
-            center.dx - eyeOffsetX + radius * 0.12, browY + 2,
+            center.dx - eyeOffsetX,
+            browY - 5,
+            center.dx - eyeOffsetX + radius * 0.12,
+            browY + 2,
           );
         final rightBrow = Path()
           ..moveTo(center.dx + eyeOffsetX - radius * 0.12, browY + 2)
           ..quadraticBezierTo(
-            center.dx + eyeOffsetX, browY - 5,
-            center.dx + eyeOffsetX + radius * 0.12, browY + 2,
+            center.dx + eyeOffsetX,
+            browY - 5,
+            center.dx + eyeOffsetX + radius * 0.12,
+            browY + 2,
           );
         canvas.drawPath(leftBrow, browPaint);
         canvas.drawPath(rightBrow, browPaint);
@@ -351,8 +377,10 @@ class BrainBudPainter extends CustomPainter {
         final smilePath = Path()
           ..moveTo(center.dx - mouthWidth, mouthY - 5)
           ..quadraticBezierTo(
-            center.dx, mouthY + radius * 0.2,
-            center.dx + mouthWidth, mouthY - 5,
+            center.dx,
+            mouthY + radius * 0.2,
+            center.dx + mouthWidth,
+            mouthY - 5,
           );
         canvas.drawPath(smilePath, mouthPaint);
         break;
@@ -371,15 +399,18 @@ class BrainBudPainter extends CustomPainter {
         final frownPath = Path()
           ..moveTo(center.dx - mouthWidth * 0.8, mouthY + 5)
           ..quadraticBezierTo(
-            center.dx, mouthY - radius * 0.12,
-            center.dx + mouthWidth * 0.8, mouthY + 5,
+            center.dx,
+            mouthY - radius * 0.12,
+            center.dx + mouthWidth * 0.8,
+            mouthY + 5,
           );
         canvas.drawPath(frownPath, mouthPaint);
         break;
     }
   }
 
-  void _drawBrainDetails(Canvas canvas, Offset center, double radius, Color color) {
+  void _drawBrainDetails(
+      Canvas canvas, Offset center, double radius, Color color) {
     final detailPaint = Paint()
       ..color = color.withOpacity(0.3)
       ..style = PaintingStyle.stroke
@@ -389,7 +420,7 @@ class BrainBudPainter extends CustomPainter {
     for (int i = 0; i < 3; i++) {
       final startAngle = (i * 120 + 30) * math.pi / 180;
       final path = Path();
-      
+
       for (int j = 0; j <= 30; j++) {
         final t = j / 30;
         final angle = startAngle + t * 0.8;
@@ -397,7 +428,7 @@ class BrainBudPainter extends CustomPainter {
         final wave = math.sin(t * math.pi * 3) * 5;
         final x = center.dx + (r + wave) * math.cos(angle);
         final y = center.dy + (r + wave) * math.sin(angle);
-        
+
         if (j == 0) {
           path.moveTo(x, y);
         } else {
@@ -428,20 +459,64 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
   String _errorMessage = '';
   bool _debugMode = false;
   int _debugSocialTimeOffset = 0; // Offset in milliseconds
+  bool _interventionsEnabled = true;
 
   // Social media time thresholds (in milliseconds)
-  static const int _happyThreshold = 30 * 60 * 1000;      // 30 minutes
+  static const int _happyThreshold = 30 * 60 * 1000; // 30 minutes
   static const int _neutralThreshold = 2 * 60 * 60 * 1000; // 2 hours
 
   @override
   void initState() {
     super.initState();
     _checkPermissionAndLoadData();
+    _loadInterventionSettings();
+    _setupInterventionMonitoring();
+  }
+
+  Future<void> _loadInterventionSettings() async {
+    final interventionService = AppInterventionService();
+    final enabled = await interventionService.areInterventionsEnabled();
+    setState(() {
+      _interventionsEnabled = enabled;
+    });
+
+    // If interventions are enabled, ensure overlay permission is granted
+    // (required for native Android overlay to appear on top of other apps)
+    if (enabled) {
+      final hasOverlay = await interventionService.hasOverlayPermission();
+      if (!hasOverlay && mounted) {
+        // Trigger the system permission screen
+        await interventionService.requestOverlayPermission();
+      }
+    }
+
+    // Start or stop monitoring based on settings
+    if (enabled) {
+      await interventionService.startMonitoring();
+    } else {
+      await interventionService.stopMonitoring();
+    }
+  }
+
+  void _setupInterventionMonitoring() {
+    // Note: Intervention overlay is now automatically triggered via the unified
+    // _handleAppLaunch() method in AppInterventionService, which piggybacks on
+    // the notification system. The callback is kept for backward compatibility
+    // and potential future use cases.
+    final interventionService = AppInterventionService();
+
+    // Set callback (overlay is now handled automatically in _handleAppLaunch)
+    interventionService.setAppLaunchCallback((packageName, appName) {
+      // Overlay is automatically shown via _handleAppLaunch()
+      // This callback can be used for other purposes if needed
+      debugLog.info('InterventionService', 'App launch callback: $packageName');
+    });
   }
 
   Future<void> _checkPermissionAndLoadData() async {
-    debugLog.info('Load Data', 'Starting to check permission and load usage stats');
-    
+    debugLog.info(
+        'Load Data', 'Starting to check permission and load usage stats');
+
     try {
       setState(() {
         _isLoading = true;
@@ -453,25 +528,32 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
       debugLog.info('Permission Result', 'Has permission: $hasPermission');
 
       if (hasPermission) {
-        debugLog.api('Fetch Stats', 'Fetching usage stats from native platform...');
+        debugLog.api(
+            'Fetch Stats', 'Fetching usage stats from native platform...');
         final startTime = DateTime.now();
         final stats = await UsageStatsService.getUsageStats();
         final duration = DateTime.now().difference(startTime).inMilliseconds;
-        
-        debugLog.success('Stats Loaded', 'Loaded ${stats.length} apps in ${duration}ms', data: {
-          'appCount': stats.length,
-          'loadTimeMs': duration,
-          'mode': 'today (midnight to now)',
-        });
-        
+
+        debugLog.success(
+            'Stats Loaded', 'Loaded ${stats.length} apps in ${duration}ms',
+            data: {
+              'appCount': stats.length,
+              'loadTimeMs': duration,
+              'mode': 'today (midnight to now)',
+            });
+
         // Log top 5 apps
         if (stats.isNotEmpty) {
-          final topApps = stats.take(5).map((a) => '${a.appName}: ${a.formattedTime}').join(', ');
+          final topApps = stats
+              .take(5)
+              .map((a) => '${a.appName}: ${a.formattedTime}')
+              .join(', ');
           debugLog.data('Top 5 Apps', topApps);
         }
-        
+
         // Calculate totals for logging
-        final totalTimeMs = stats.fold<int>(0, (sum, app) => sum + app.totalTimeInForeground);
+        final totalTimeMs =
+            stats.fold<int>(0, (sum, app) => sum + app.totalTimeInForeground);
         final hours = totalTimeMs ~/ (1000 * 60 * 60);
         final minutes = (totalTimeMs % (1000 * 60 * 60)) ~/ (1000 * 60);
         debugLog.data('Total Screen Time', '${hours}h ${minutes}m', data: {
@@ -481,21 +563,22 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
           'userApps': stats.where((a) => !a.isSystemApp).length,
           'systemApps': stats.where((a) => a.isSystemApp).length,
         });
-        
+
         setState(() {
           _hasPermission = true;
           _usageStats = stats;
           _isLoading = false;
         });
-        
+
         // Check for mood changes and send notification if needed
         _checkMoodChange(stats);
-        
+
         // Check achievements
         final achievementService = AchievementService();
         await achievementService.checkAchievements(stats);
       } else {
-        debugLog.warning('No Permission', 'Usage access permission not granted');
+        debugLog.warning(
+            'No Permission', 'Usage access permission not granted');
         setState(() {
           _hasPermission = false;
           _isLoading = false;
@@ -545,14 +628,15 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
   }
 
   int _getTotalUsageTime() {
-    return _filteredStats.fold(0, (sum, app) => sum + app.totalTimeInForeground);
+    return _filteredStats.fold(
+        0, (sum, app) => sum + app.totalTimeInForeground);
   }
 
   int _getSocialMediaTime() {
     final realTime = _filteredStats
         .where((app) => app.isSocialMediaApp())
         .fold(0, (sum, app) => sum + app.totalTimeInForeground);
-    
+
     // In debug mode, add the offset (can be negative)
     if (_debugMode) {
       return (realTime + _debugSocialTimeOffset).clamp(0, 24 * 60 * 60 * 1000);
@@ -574,7 +658,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
   String _getMoodMessage() {
     final mood = _getMood();
     final socialMinutes = _getSocialMediaTime() ~/ (1000 * 60);
-    
+
     switch (mood) {
       case BrainBudMood.happy:
         if (socialMinutes == 0) {
@@ -620,7 +704,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
       final socialMediaTime = stats
           .where((app) => app.isSocialMediaApp() && !app.isSystemApp)
           .fold<int>(0, (sum, app) => sum + app.totalTimeInForeground);
-      
+
       final socialMinutes = socialMediaTime ~/ (1000 * 60);
       final currentMood = _getMood();
 
@@ -645,12 +729,14 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
           if (socialMinutes == 0) {
             message = "No social media today! I'm so proud of you! 🌟";
           } else {
-            message = "Only ${socialMinutes}m on social media. Great balance! 🎉";
+            message =
+                "Only ${socialMinutes}m on social media. Great balance! 🎉";
           }
         } else if (currentMood == BrainBudMood.neutral) {
           final hours = socialMinutes ~/ 60;
           final mins = socialMinutes % 60;
-          message = "${hours}h ${mins}m on social media. Maybe take a break? 🤔";
+          message =
+              "${hours}h ${mins}m on social media. Maybe take a break? 🤔";
         } else {
           final hours = socialMinutes ~/ 60;
           final mins = socialMinutes % 60;
@@ -663,7 +749,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
           socialMediaMinutes: socialMinutes,
         );
 
-        debugLog.success('Mood Change', 'Mood changed: $lastMoodStr → $currentMoodStr');
+        debugLog.success(
+            'Mood Change', 'Mood changed: $lastMoodStr → $currentMoodStr');
       }
     } catch (e) {
       debugLog.error('Mood Change', 'Failed to check mood change: $e');
@@ -683,16 +770,32 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
         centerTitle: true,
         backgroundColor: colorScheme.surface,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.bug_report, color: colorScheme.primary),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const DebugLogScreen()),
-            );
-          },
-          tooltip: 'Debug Logs',
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(Icons.bug_report, color: colorScheme.primary),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const DebugLogScreen()),
+                );
+              },
+              tooltip: 'Debug Logs',
+            ),
+            IconButton(
+              icon: Icon(Icons.security, color: colorScheme.primary),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const PermissionDebugScreen()),
+                );
+              },
+              tooltip: 'Permission Status',
+            ),
+          ],
         ),
+        leadingWidth: 96,
         actions: [
           // Achievements button
           IconButton(
@@ -719,6 +822,53 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
             }),
             tooltip: 'Toggle Debug Mode',
           ),
+          // Interventions toggle
+          IconButton(
+            icon: Icon(
+              _interventionsEnabled ? Icons.block : Icons.block_outlined,
+              color: _interventionsEnabled
+                  ? colorScheme.primary
+                  : colorScheme.onSurface.withOpacity(0.5),
+            ),
+            onPressed: () async {
+              final interventionService = AppInterventionService();
+              final newValue = !_interventionsEnabled;
+              await interventionService.setInterventionsEnabled(newValue);
+
+              // Start or stop monitoring based on new value
+              if (newValue) {
+                await interventionService.startMonitoring();
+              } else {
+                await interventionService.stopMonitoring();
+              }
+
+              setState(() {
+                _interventionsEnabled = newValue;
+              });
+            },
+            tooltip: _interventionsEnabled
+                ? 'Interventions Enabled'
+                : 'Interventions Disabled',
+          ),
+          // Test intervention button (for testing)
+          if (_debugMode)
+            IconButton(
+              icon: Icon(Icons.play_arrow, color: colorScheme.primary),
+              onPressed: () async {
+                // Test intervention screen
+                final interventionService = AppInterventionService();
+                await interventionService
+                    .incrementLaunchAttempt('com.instagram.android');
+                if (mounted) {
+                  await InterventionOverlay.showIntervention(
+                    context,
+                    'com.instagram.android',
+                    'Instagram',
+                  );
+                }
+              },
+              tooltip: 'Test Intervention',
+            ),
           if (_hasPermission)
             IconButton(
               icon: Icon(Icons.refresh, color: colorScheme.primary),
@@ -737,7 +887,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+            CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 16),
             Text(
               'Loading usage statistics...',
@@ -811,7 +962,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -854,7 +1006,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
             Text(
               _errorMessage,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: colorScheme.onSurface.withOpacity(0.7)),
+              style: TextStyle(
+                  fontSize: 16, color: colorScheme.onSurface.withOpacity(0.7)),
             ),
             const SizedBox(height: 32),
             FilledButton.icon(
@@ -876,7 +1029,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
 
     // Count categories
     final socialCount = stats.where((app) => app.isSocialMediaApp()).length;
-    final productivityCount = stats.where((app) => app.isProductivityApp()).length;
+    final productivityCount =
+        stats.where((app) => app.isProductivityApp()).length;
     final gamingCount = stats.where((app) => app.isGamingApp()).length;
 
     return RefreshIndicator(
@@ -887,7 +1041,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
           children: [
             // Brain Bud Character Section (moved to top)
             const SizedBox(height: 20),
-            
+
             // Character with glow effect based on mood
             Container(
               decoration: BoxDecoration(
@@ -913,7 +1067,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 decoration: BoxDecoration(
                   color: _getMoodColor().withOpacity(0.1),
                   borderRadius: BorderRadius.circular(16),
@@ -1014,10 +1169,14 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        _buildSummaryItem('Apps', stats.length.toString(), Icons.apps),
-                        _buildSummaryItem('Social', socialCount.toString(), Icons.people),
-                        _buildSummaryItem('Productivity', productivityCount.toString(), Icons.work),
-                        _buildSummaryItem('Games', gamingCount.toString(), Icons.games),
+                        _buildSummaryItem(
+                            'Apps', stats.length.toString(), Icons.apps),
+                        _buildSummaryItem(
+                            'Social', socialCount.toString(), Icons.people),
+                        _buildSummaryItem('Productivity',
+                            productivityCount.toString(), Icons.work),
+                        _buildSummaryItem(
+                            'Games', gamingCount.toString(), Icons.games),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -1033,7 +1192,6 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
                 ),
               ),
             ),
-
 
             // Social media time indicator
             Padding(
@@ -1065,9 +1223,11 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
-                      value: (_getSocialMediaTime() / _neutralThreshold).clamp(0.0, 1.0),
+                      value: (_getSocialMediaTime() / _neutralThreshold)
+                          .clamp(0.0, 1.0),
                       backgroundColor: colorScheme.outline.withOpacity(0.1),
-                      valueColor: AlwaysStoppedAnimation<Color>(_getMoodColor()),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(_getMoodColor()),
                       minHeight: 8,
                     ),
                   ),
@@ -1137,13 +1297,13 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
 
   Widget _buildDebugControls() {
     if (!_debugMode) return const SizedBox.shrink();
-    
+
     final colorScheme = Theme.of(context).colorScheme;
     final offsetMinutes = _debugSocialTimeOffset ~/ (1000 * 60);
     final realTime = _filteredStats
         .where((app) => app.isSocialMediaApp())
         .fold(0, (sum, app) => sum + app.totalTimeInForeground);
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(12),
@@ -1154,12 +1314,12 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
       ),
       child: Column(
         children: [
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.bug_report, color: Colors.orange, size: 16),
-              const SizedBox(width: 4),
-              const Text(
+              Icon(Icons.bug_report, color: Colors.orange, size: 16),
+              SizedBox(width: 4),
+              Text(
                 'DEBUG MODE',
                 style: TextStyle(
                   color: Colors.orange,
@@ -1180,19 +1340,33 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // -30 min
-              _debugButton('-30m', () => setState(() => _debugSocialTimeOffset -= 30 * 60 * 1000)),
+              _debugButton(
+                  '-30m',
+                  () =>
+                      setState(() => _debugSocialTimeOffset -= 30 * 60 * 1000)),
               const SizedBox(width: 8),
               // -5 min
-              _debugButton('-5m', () => setState(() => _debugSocialTimeOffset -= 5 * 60 * 1000)),
+              _debugButton(
+                  '-5m',
+                  () =>
+                      setState(() => _debugSocialTimeOffset -= 5 * 60 * 1000)),
               const SizedBox(width: 8),
               // Reset
-              _debugButton('Reset', () => setState(() => _debugSocialTimeOffset = 0), isReset: true),
+              _debugButton(
+                  'Reset', () => setState(() => _debugSocialTimeOffset = 0),
+                  isReset: true),
               const SizedBox(width: 8),
               // +5 min
-              _debugButton('+5m', () => setState(() => _debugSocialTimeOffset += 5 * 60 * 1000)),
+              _debugButton(
+                  '+5m',
+                  () =>
+                      setState(() => _debugSocialTimeOffset += 5 * 60 * 1000)),
               const SizedBox(width: 8),
               // +30 min
-              _debugButton('+30m', () => setState(() => _debugSocialTimeOffset += 30 * 60 * 1000)),
+              _debugButton(
+                  '+30m',
+                  () =>
+                      setState(() => _debugSocialTimeOffset += 30 * 60 * 1000)),
             ],
           ),
           const SizedBox(height: 8),
@@ -1212,7 +1386,8 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
     );
   }
 
-  Widget _debugButton(String label, VoidCallback onPressed, {bool isReset = false}) {
+  Widget _debugButton(String label, VoidCallback onPressed,
+      {bool isReset = false}) {
     return SizedBox(
       height: 32,
       child: ElevatedButton(
@@ -1230,16 +1405,18 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
     final realTime = _filteredStats
         .where((app) => app.isSocialMediaApp())
         .fold(0, (sum, app) => sum + app.totalTimeInForeground);
-    
+
     return SizedBox(
       height: 48,
       child: OutlinedButton(
-        onPressed: () => setState(() => _debugSocialTimeOffset = targetTime - realTime),
+        onPressed: () =>
+            setState(() => _debugSocialTimeOffset = targetTime - realTime),
         style: OutlinedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           side: const BorderSide(color: Colors.orange),
         ),
-        child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
+        child: Text(label,
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
       ),
     );
   }

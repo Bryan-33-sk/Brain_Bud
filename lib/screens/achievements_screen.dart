@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/achievement.dart';
 import '../services/achievement_service.dart';
 
@@ -42,7 +41,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
 
   List<Achievement> _getFilteredAchievements() {
     final tabIndex = _tabController.index;
-    
+
     switch (tabIndex) {
       case 0: // All
         return _allAchievements;
@@ -83,10 +82,30 @@ class _AchievementsScreenState extends State<AchievementsScreen>
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'All'),
-            Tab(text: 'Unlocked'),
-            Tab(text: 'In Progress'),
-            Tab(text: 'Locked'),
+            Tab(
+              icon: Tooltip(
+                message: 'All Achievements',
+                child: Icon(Icons.apps),
+              ),
+            ),
+            Tab(
+              icon: Tooltip(
+                message: 'Unlocked',
+                child: Icon(Icons.lock_open),
+              ),
+            ),
+            Tab(
+              icon: Tooltip(
+                message: 'In Progress',
+                child: Icon(Icons.trending_up),
+              ),
+            ),
+            Tab(
+              icon: Tooltip(
+                message: 'Locked',
+                child: Icon(Icons.lock),
+              ),
+            ),
           ],
           onTap: (_) => setState(() {}),
         ),
@@ -95,10 +114,10 @@ class _AchievementsScreenState extends State<AchievementsScreen>
         children: [
           // Statistics Card
           _buildStatisticsCard(colorScheme),
-          
+
           // Category Filter
           _buildCategoryFilter(colorScheme),
-          
+
           // Achievements List
           Expanded(
             child: RefreshIndicator(
@@ -187,8 +206,15 @@ class _AchievementsScreenState extends State<AchievementsScreen>
   }
 
   Widget _buildCategoryFilter(ColorScheme colorScheme) {
-    final categories = ['All', 'Daily', 'Streak', 'Milestone', 'Reduction', 'Special'];
-    
+    final categories = [
+      'All',
+      'Daily',
+      'Streak',
+      'Milestone',
+      'Reduction',
+      'Special'
+    ];
+
     return SizedBox(
       height: 50,
       child: ListView.builder(
@@ -198,7 +224,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
         itemBuilder: (context, index) {
           final category = categories[index];
           final isSelected = _selectedCategory == category;
-          
+
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
@@ -220,7 +246,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
 
   Widget _buildAchievementsList(ColorScheme colorScheme) {
     final achievements = _getCategoryAchievements(_getFilteredAchievements());
-    
+
     if (achievements.isEmpty) {
       return Center(
         child: Column(
@@ -253,7 +279,8 @@ class _AchievementsScreenState extends State<AchievementsScreen>
     );
   }
 
-  Widget _buildAchievementCard(Achievement achievement, ColorScheme colorScheme) {
+  Widget _buildAchievementCard(
+      Achievement achievement, ColorScheme colorScheme) {
     final isUnlocked = achievement.unlocked;
     final isInProgress = achievement.isInProgress;
 
@@ -384,8 +411,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
     if (difference == 0) return 'Today';
     if (difference == 1) return 'Yesterday';
     if (difference < 7) return '$difference days ago';
-    
+
     return '${date.day}/${date.month}/${date.year}';
   }
 }
-

@@ -6,37 +6,55 @@ import 'services/debug_log_service.dart';
 import 'services/notification_service.dart';
 import 'services/usage_monitor_service.dart';
 import 'services/achievement_service.dart';
-import 'screens/debug_log_screen.dart';
 import 'screens/category_breakdown_screen.dart';
 import 'screens/achievements_screen.dart';
 import 'services/app_intervention_service.dart';
-import 'widgets/intervention_overlay.dart';
-import 'screens/permission_debug_screen.dart';
+import 'screens/settings_screen.dart';
+import 'screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final prefs = await SharedPreferences.getInstance();
+  
+  // Version-based onboarding check
+  // This ensures onboarding shows even if SharedPreferences has stale data
+  final lastOnboardingVersion = prefs.getString('onboarding_version');
+  final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+  
+  // Show onboarding if:
+  // 1. Never completed onboarding, OR
+  // 2. App version changed significantly (for future onboarding updates)
+  final shouldShowOnboarding = !onboardingCompleted || lastOnboardingVersion == null;
+  
+  // If showing onboarding, clear the completed flag to ensure clean state
+  if (shouldShowOnboarding) {
+    await prefs.setBool('onboarding_completed', false);
+  }
+  
   // Initialize notifications
   final notificationService = NotificationService();
   await notificationService.initialize();
-
+  
   // Initialize background monitoring
   final monitorService = UsageMonitorService();
   await monitorService.initialize();
-
+  
   // Initialize achievements
   final achievementService = AchievementService();
   await achievementService.initialize();
-
+  
   // Initialize intervention service
   final interventionService = AppInterventionService();
   await interventionService.initialize();
 
-  runApp(const MyApp());
+  runApp(MyApp(showOnboarding: shouldShowOnboarding));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool showOnboarding;
+  
+  const MyApp({super.key, this.showOnboarding = false});
 
   // Global navigator key for accessing context from services
   static final GlobalKey<NavigatorState> navigatorKey =
@@ -54,8 +72,9 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF7C3AED),
-          brightness: Brightness.light,
+          brightness: Brightness.dark,
         ),
+        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
@@ -63,12 +82,271 @@ class MyApp extends StatelessWidget {
           seedColor: const Color(0xFF7C3AED),
           brightness: Brightness.dark,
         ),
+        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         useMaterial3: true,
       ),
-      home: const ScreenTimePage(),
+      themeMode: ThemeMode.dark,
+      home: showOnboarding ? const OnboardingScreen() : const MainAppShell(),
       debugShowCheckedModeBanner: false,
     );
   }
+}
+
+/// Main app shell with bottom navigation
+class MainAppShell extends StatefulWidget {
+  const MainAppShell({super.key});
+
+  @override
+  State<MainAppShell> createState() => _MainAppShellState();
+}
+
+class _MainAppShellState extends State<MainAppShell>
+    with TickerProviderStateMixin {
+  int _currentIndex = 1; // Start on Home (middle tab)
+
+  // Screen transition animation
+  late AnimationController _screenAnimationController;
+  late Animation<double> _screenFadeAnimation;
+  late Animation<double> _screenScaleAnimation;
+
+  // Icon bounce animations for each tab
+  late List<AnimationController> _iconBounceControllers;
+  late List<Animation<double>> _iconBounceAnimations;
+
+  final List<Widget> _screens = const [
+    AchievementsScreen(),
+    HomeScreen(),
+    SettingsScreen(),
+  ];
+
+  // Navigation item configurations
+  final List<_NavItemConfig> _navItems = const [
+    _NavItemConfig(
+      icon: Icons.emoji_events_outlined,
+      activeIcon: Icons.emoji_events,
+      label: 'Achievements',
+    ),
+    _NavItemConfig(
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home,
+      label: 'Home',
+    ),
+    _NavItemConfig(
+      icon: Icons.settings_outlined,
+      activeIcon: Icons.settings,
+      label: 'Settings',
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Screen transition controller
+    _screenAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+
+    _screenFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _screenAnimationController,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _screenScaleAnimation = Tween<double>(begin: 0.94, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _screenAnimationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    // Icon bounce controllers
+    _iconBounceControllers = List.generate(
+      3,
+      (index) => AnimationController(
+        duration: const Duration(milliseconds: 200),
+        vsync: this,
+      ),
+    );
+
+    _iconBounceAnimations = _iconBounceControllers.map((controller) {
+      return TweenSequence<double>([
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.0, end: 1.2)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 50,
+        ),
+        TweenSequenceItem(
+          tween: Tween<double>(begin: 1.2, end: 1.0)
+              .chain(CurveTween(curve: Curves.elasticOut)),
+          weight: 50,
+        ),
+      ]).animate(controller);
+    }).toList();
+
+    // Start with the screen visible
+    _screenAnimationController.value = 1.0;
+  }
+
+  @override
+  void dispose() {
+    _screenAnimationController.dispose();
+    for (final controller in _iconBounceControllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _onNavItemTapped(int index) {
+    if (index == _currentIndex) return;
+
+    setState(() {
+      _currentIndex = index;
+    });
+
+    // Trigger icon bounce
+    _iconBounceControllers[index].forward(from: 0);
+
+    // Animate screen transition
+    _screenAnimationController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: AnimatedBuilder(
+        animation: _screenAnimationController,
+        builder: (context, child) {
+          return FadeTransition(
+            opacity: _screenFadeAnimation,
+            child: ScaleTransition(
+              scale: _screenScaleAnimation,
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _screens,
+              ),
+            ),
+          );
+        },
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF111111),
+          border: Border(
+            top: BorderSide(
+              color: Colors.white.withOpacity(0.05),
+              width: 1,
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(3, (index) {
+                return _buildNavItem(
+                  index: index,
+                  config: _navItems[index],
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required int index,
+    required _NavItemConfig config,
+  }) {
+    final isActive = _currentIndex == index;
+
+    return GestureDetector(
+      onTap: () => _onNavItemTapped(index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedBuilder(
+        animation: _iconBounceAnimations[index],
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _iconBounceAnimations[index].value,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.symmetric(
+                horizontal: isActive ? 16 : 12,
+                vertical: 10,
+              ),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? const Color(0xFF7C3AED).withOpacity(0.2)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Animated icon
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, animation) {
+                      return ScaleTransition(scale: animation, child: child);
+                    },
+                    child: Icon(
+                      isActive ? config.activeIcon : config.icon,
+                      key: ValueKey(isActive),
+                      color: isActive
+                          ? const Color(0xFF7C3AED)
+                          : Colors.white.withOpacity(0.4),
+                      size: 24,
+                    ),
+                  ),
+                  // Animated label
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isActive) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            config.label,
+                            style: const TextStyle(
+                              color: Color(0xFF7C3AED),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Configuration for a navigation item
+class _NavItemConfig {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+
+  const _NavItemConfig({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
 }
 
 /// Brain Bud mood based on social media usage
@@ -192,7 +470,7 @@ class BrainBudPainter extends CustomPainter {
   void _drawBrainShape(
       Canvas canvas, Offset center, double radius, Paint paint) {
     final path = Path();
-
+    
     // Create a brain-like blob shape
     for (int i = 0; i <= 360; i += 5) {
       final angle = i * math.pi / 180;
@@ -201,7 +479,7 @@ class BrainBudPainter extends CustomPainter {
       final r = radius + waveOffset;
       final x = center.dx + r * math.cos(angle);
       final y = center.dy + r * math.sin(angle);
-
+      
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -239,10 +517,10 @@ class BrainBudPainter extends CustomPainter {
 
     // Pupils - position based on mood
     final pupilPaint = Paint()..color = const Color(0xFF1F2937);
-    final pupilOffset = mood == BrainBudMood.sad
+    final pupilOffset = mood == BrainBudMood.sad 
         ? const Offset(0, 3) // Look down when sad
         : const Offset(0, 0);
-
+    
     canvas.drawCircle(
       Offset(center.dx - eyeOffsetX, center.dy - eyeOffsetY) + pupilOffset,
       eyeRadius * 0.7,
@@ -298,7 +576,7 @@ class BrainBudPainter extends CustomPainter {
     }
   }
 
-  void _drawEyebrows(Canvas canvas, Offset center, double radius,
+  void _drawEyebrows(Canvas canvas, Offset center, double radius, 
       double eyeOffsetX, double eyeOffsetY) {
     final browPaint = Paint()
       ..color = const Color(0xFF1F2937)
@@ -420,7 +698,7 @@ class BrainBudPainter extends CustomPainter {
     for (int i = 0; i < 3; i++) {
       final startAngle = (i * 120 + 30) * math.pi / 180;
       final path = Path();
-
+      
       for (int j = 0; j <= 30; j++) {
         final t = j / 30;
         final angle = startAngle + t * 0.8;
@@ -428,7 +706,7 @@ class BrainBudPainter extends CustomPainter {
         final wave = math.sin(t * math.pi * 3) * 5;
         final x = center.dx + (r + wave) * math.cos(angle);
         final y = center.dy + (r + wave) * math.sin(angle);
-
+        
         if (j == 0) {
           path.moveTo(x, y);
         } else {
@@ -445,21 +723,20 @@ class BrainBudPainter extends CustomPainter {
   }
 }
 
-class ScreenTimePage extends StatefulWidget {
-  const ScreenTimePage({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<ScreenTimePage> createState() => _ScreenTimePageState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _ScreenTimePageState extends State<ScreenTimePage> {
+class _HomeScreenState extends State<HomeScreen> {
   List<AppUsageInfo> _usageStats = [];
   bool _isLoading = true;
   bool _hasPermission = false;
   String _errorMessage = '';
   bool _debugMode = false;
   int _debugSocialTimeOffset = 0; // Offset in milliseconds
-  bool _interventionsEnabled = true;
 
   // Social media time thresholds (in milliseconds)
   static const int _happyThreshold = 30 * 60 * 1000; // 30 minutes
@@ -476,25 +753,10 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
   Future<void> _loadInterventionSettings() async {
     final interventionService = AppInterventionService();
     final enabled = await interventionService.areInterventionsEnabled();
-    setState(() {
-      _interventionsEnabled = enabled;
-    });
-
-    // If interventions are enabled, ensure overlay permission is granted
-    // (required for native Android overlay to appear on top of other apps)
-    if (enabled) {
-      final hasOverlay = await interventionService.hasOverlayPermission();
-      if (!hasOverlay && mounted) {
-        // Trigger the system permission screen
-        await interventionService.requestOverlayPermission();
-      }
-    }
 
     // Start or stop monitoring based on settings
     if (enabled) {
       await interventionService.startMonitoring();
-    } else {
-      await interventionService.stopMonitoring();
     }
   }
 
@@ -516,7 +778,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
   Future<void> _checkPermissionAndLoadData() async {
     debugLog.info(
         'Load Data', 'Starting to check permission and load usage stats');
-
+    
     try {
       setState(() {
         _isLoading = true;
@@ -533,15 +795,15 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
         final startTime = DateTime.now();
         final stats = await UsageStatsService.getUsageStats();
         final duration = DateTime.now().difference(startTime).inMilliseconds;
-
+        
         debugLog.success(
             'Stats Loaded', 'Loaded ${stats.length} apps in ${duration}ms',
             data: {
-              'appCount': stats.length,
-              'loadTimeMs': duration,
-              'mode': 'today (midnight to now)',
-            });
-
+          'appCount': stats.length,
+          'loadTimeMs': duration,
+          'mode': 'today (midnight to now)',
+        });
+        
         // Log top 5 apps
         if (stats.isNotEmpty) {
           final topApps = stats
@@ -550,7 +812,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
               .join(', ');
           debugLog.data('Top 5 Apps', topApps);
         }
-
+        
         // Calculate totals for logging
         final totalTimeMs =
             stats.fold<int>(0, (sum, app) => sum + app.totalTimeInForeground);
@@ -563,16 +825,16 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
           'userApps': stats.where((a) => !a.isSystemApp).length,
           'systemApps': stats.where((a) => a.isSystemApp).length,
         });
-
+        
         setState(() {
           _hasPermission = true;
           _usageStats = stats;
           _isLoading = false;
         });
-
+        
         // Check for mood changes and send notification if needed
         _checkMoodChange(stats);
-
+        
         // Check achievements
         final achievementService = AchievementService();
         await achievementService.checkAchievements(stats);
@@ -636,7 +898,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
     final realTime = _filteredStats
         .where((app) => app.isSocialMediaApp())
         .fold(0, (sum, app) => sum + app.totalTimeInForeground);
-
+    
     // In debug mode, add the offset (can be negative)
     if (_debugMode) {
       return (realTime + _debugSocialTimeOffset).clamp(0, 24 * 60 * 60 * 1000);
@@ -658,7 +920,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
   String _getMoodMessage() {
     final mood = _getMood();
     final socialMinutes = _getSocialMediaTime() ~/ (1000 * 60);
-
+    
     switch (mood) {
       case BrainBudMood.happy:
         if (socialMinutes == 0) {
@@ -704,7 +966,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
       final socialMediaTime = stats
           .where((app) => app.isSocialMediaApp() && !app.isSystemApp)
           .fold<int>(0, (sum, app) => sum + app.totalTimeInForeground);
-
+      
       final socialMinutes = socialMediaTime ~/ (1000 * 60);
       final currentMood = _getMood();
 
@@ -759,125 +1021,11 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Brain Bud',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: Icon(Icons.bug_report, color: colorScheme.primary),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const DebugLogScreen()),
-                );
-              },
-              tooltip: 'Debug Logs',
-            ),
-            IconButton(
-              icon: Icon(Icons.security, color: colorScheme.primary),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const PermissionDebugScreen()),
-                );
-              },
-              tooltip: 'Permission Status',
-            ),
-          ],
-        ),
-        leadingWidth: 96,
-        actions: [
-          // Achievements button
-          IconButton(
-            icon: Icon(Icons.emoji_events, color: colorScheme.primary),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AchievementsScreen(),
-                ),
-              );
-            },
-            tooltip: 'Achievements',
-          ),
-          // Debug mode toggle
-          IconButton(
-            icon: Icon(
-              _debugMode ? Icons.science : Icons.science_outlined,
-              color: _debugMode ? Colors.orange : colorScheme.primary,
-            ),
-            onPressed: () => setState(() {
-              _debugMode = !_debugMode;
-              if (!_debugMode) _debugSocialTimeOffset = 0;
-            }),
-            tooltip: 'Toggle Debug Mode',
-          ),
-          // Interventions toggle
-          IconButton(
-            icon: Icon(
-              _interventionsEnabled ? Icons.block : Icons.block_outlined,
-              color: _interventionsEnabled
-                  ? colorScheme.primary
-                  : colorScheme.onSurface.withOpacity(0.5),
-            ),
-            onPressed: () async {
-              final interventionService = AppInterventionService();
-              final newValue = !_interventionsEnabled;
-              await interventionService.setInterventionsEnabled(newValue);
-
-              // Start or stop monitoring based on new value
-              if (newValue) {
-                await interventionService.startMonitoring();
-              } else {
-                await interventionService.stopMonitoring();
-              }
-
-              setState(() {
-                _interventionsEnabled = newValue;
-              });
-            },
-            tooltip: _interventionsEnabled
-                ? 'Interventions Enabled'
-                : 'Interventions Disabled',
-          ),
-          // Test intervention button (for testing)
-          if (_debugMode)
-            IconButton(
-              icon: Icon(Icons.play_arrow, color: colorScheme.primary),
-              onPressed: () async {
-                // Test intervention screen
-                final interventionService = AppInterventionService();
-                await interventionService
-                    .incrementLaunchAttempt('com.instagram.android');
-                if (mounted) {
-                  await InterventionOverlay.showIntervention(
-                    context,
-                    'com.instagram.android',
-                    'Instagram',
-                  );
-                }
-              },
-              tooltip: 'Test Intervention',
-            ),
-          if (_hasPermission)
-            IconButton(
-              icon: Icon(Icons.refresh, color: colorScheme.primary),
-              onPressed: _isLoading ? null : _checkPermissionAndLoadData,
-              tooltip: 'Refresh',
-            ),
-        ],
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: SafeArea(
+        child: _buildBody(),
       ),
-      body: _buildBody(),
     );
   }
 
@@ -916,27 +1064,31 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // Brain Bud character looking hopeful
             Container(
-              width: 120,
-              height: 120,
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF7C3AED).withOpacity(0.3),
+                    blurRadius: 40,
+                    spreadRadius: 10,
+                  ),
+                ],
               ),
-              child: Icon(
-                Icons.timer_outlined,
-                size: 60,
-                color: colorScheme.primary,
+              child: const BrainBudCharacter(
+                mood: BrainBudMood.neutral,
+                size: 160,
               ),
             ),
             const SizedBox(height: 32),
             Text(
-              'Usage Access Required',
+              'Let\'s Get Started!',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -945,7 +1097,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'To show app usage statistics, Brain Bud needs usage access permission. This allows us to display how long you\'ve used your apps.',
+              'Brain Bud needs permission to see your app usage so I can help you build healthier digital habits.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -953,28 +1105,79 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
                 height: 1.5,
               ),
             ),
-            const SizedBox(height: 40),
-            FilledButton.icon(
-              onPressed: _requestPermission,
-              icon: const Icon(Icons.settings),
-              label: const Text(
-                'Grant Permission',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            const SizedBox(height: 12),
+            // Privacy note
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Colors.green.withOpacity(0.3),
+                ),
               ),
-              style: FilledButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.lock_rounded,
+                    color: Colors.green,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Your data stays on your device. Always.',
+                      style: TextStyle(
+                        color: Colors.green.shade100,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _requestPermission,
+                icon: const Icon(Icons.settings),
+                label: const Text(
+                  'Grant Permission',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
-              'Find Brain Bud in the list and enable access',
+              'Find "Brain Bud" in the list and enable access',
               style: TextStyle(
                 fontSize: 13,
                 color: colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Option to run full setup
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const OnboardingScreen(),
+                  ),
+                );
+              },
+              child: Text(
+                'Run Full Setup',
+                style: TextStyle(
+                  color: colorScheme.primary.withOpacity(0.8),
+                  fontSize: 14,
+                ),
               ),
             ),
           ],
@@ -1041,7 +1244,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
           children: [
             // Brain Bud Character Section (moved to top)
             const SizedBox(height: 20),
-
+            
             // Character with glow effect based on mood
             Container(
               decoration: BoxDecoration(
@@ -1297,13 +1500,13 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
 
   Widget _buildDebugControls() {
     if (!_debugMode) return const SizedBox.shrink();
-
+    
     final colorScheme = Theme.of(context).colorScheme;
     final offsetMinutes = _debugSocialTimeOffset ~/ (1000 * 60);
     final realTime = _filteredStats
         .where((app) => app.isSocialMediaApp())
         .fold(0, (sum, app) => sum + app.totalTimeInForeground);
-
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(12),
@@ -1405,7 +1608,7 @@ class _ScreenTimePageState extends State<ScreenTimePage> {
     final realTime = _filteredStats
         .where((app) => app.isSocialMediaApp())
         .fold(0, (sum, app) => sum + app.totalTimeInForeground);
-
+    
     return SizedBox(
       height: 48,
       child: OutlinedButton(

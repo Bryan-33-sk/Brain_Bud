@@ -160,24 +160,23 @@ class MainActivity: FlutterActivity() {
     }
     
     private fun hasUsageStatsPermission(): Boolean {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val endTime = System.currentTimeMillis()
-        val startTime = endTime - (60 * 1000) // Last minute
-        
-        // Try queryEvents first - this is more reliable for permission check
-        return try {
-            val events = usageStatsManager.queryEvents(startTime, endTime)
-            // If we can query events without exception, permission is granted
-            // Some devices return empty events but still have permission
-            val stats = usageStatsManager.queryUsageStats(
-                UsageStatsManager.INTERVAL_DAILY,
-                startTime,
-                endTime
+        // Use AppOpsManager for reliable permission check
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            appOps.unsafeCheckOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                packageName
             )
-            events != null || (stats != null && stats.isNotEmpty())
-        } catch (e: SecurityException) {
-            false
+        } else {
+            @Suppress("DEPRECATION")
+            appOps.checkOpNoThrow(
+                android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                packageName
+            )
         }
+        return mode == android.app.AppOpsManager.MODE_ALLOWED
     }
     
     private fun openUsageAccessSettings() {

@@ -10,9 +10,7 @@ class AchievementsScreen extends StatefulWidget {
   State<AchievementsScreen> createState() => _AchievementsScreenState();
 }
 
-class _AchievementsScreenState extends State<AchievementsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _AchievementsScreenState extends State<AchievementsScreen> {
   final AchievementService _achievementService = AchievementService();
   List<Achievement> _allAchievements = [];
   Map<String, dynamic> _statistics = {};
@@ -21,14 +19,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
     _loadAchievements();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadAchievements() async {
@@ -40,20 +31,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
   }
 
   List<Achievement> _getFilteredAchievements() {
-    final tabIndex = _tabController.index;
-
-    switch (tabIndex) {
-      case 0: // All
-        return _allAchievements;
-      case 1: // Unlocked
-        return _achievementService.getUnlockedAchievements();
-      case 2: // In Progress
-        return _achievementService.getInProgressAchievements();
-      case 3: // Locked
-        return _achievementService.getLockedAchievements();
-      default:
-        return _allAchievements;
-    }
+    return _allAchievements;
   }
 
   List<Achievement> _getCategoryAchievements(List<Achievement> achievements) {
@@ -67,50 +45,8 @@ class _AchievementsScreenState extends State<AchievementsScreen>
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text(
-          'Achievements',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_rounded, color: colorScheme.primary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(
-              icon: Tooltip(
-                message: 'All Achievements',
-                child: Icon(Icons.apps),
-              ),
-            ),
-            Tab(
-              icon: Tooltip(
-                message: 'Unlocked',
-                child: Icon(Icons.lock_open),
-              ),
-            ),
-            Tab(
-              icon: Tooltip(
-                message: 'In Progress',
-                child: Icon(Icons.trending_up),
-              ),
-            ),
-            Tab(
-              icon: Tooltip(
-                message: 'Locked',
-                child: Icon(Icons.lock),
-              ),
-            ),
-          ],
-          onTap: (_) => setState(() {}),
-        ),
-      ),
-      body: Column(
+      body: SafeArea(
+        child: Column(
         children: [
           // Statistics Card
           _buildStatisticsCard(colorScheme),
@@ -126,6 +62,7 @@ class _AchievementsScreenState extends State<AchievementsScreen>
             ),
           ),
         ],
+        ),
       ),
     );
   }

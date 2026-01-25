@@ -253,208 +253,228 @@ class _PermissionOnboardingScreenState extends State<PermissionOnboardingScreen>
     final isGranted = _permissionStatus[index] ?? false;
     final isFirstOrLast = index == 0 || index == _steps.length - 1;
     
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          const Spacer(),
-          
-          // Icon
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: const Color(0xFF7C3AED).withOpacity(0.15),
-              shape: BoxShape.circle,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height - 120,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Top section - Icon, title, description
+            Column(
+              children: [
+                const SizedBox(height: 16),
+                
+                // Icon
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C3AED).withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    isGranted && !isFirstOrLast ? Icons.check_rounded : step.icon,
+                    size: 48,
+                    color: isGranted && !isFirstOrLast 
+                        ? Colors.green 
+                        : const Color(0xFF7C3AED),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Title
+                Text(
+                  step.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Description
+                Text(
+                  step.description,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 15,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-            child: Icon(
-              isGranted && !isFirstOrLast ? Icons.check_rounded : step.icon,
-              size: 56,
-              color: isGranted && !isFirstOrLast 
-                  ? Colors.green 
-                  : const Color(0xFF7C3AED),
-            ),
-          ),
-          
-          const SizedBox(height: 32),
-          
-          // Title
-          Text(
-            step.title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Description
-          Text(
-            step.description,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 16,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          
-          // Warning text (if any)
-          if (step.warningText != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.lightbulb_outline, color: Colors.amber, size: 24),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      step.warningText!,
-                      style: TextStyle(
-                        color: Colors.amber.shade100,
-                        fontSize: 13,
-                        height: 1.4,
-                      ),
+            
+            // Middle section - Warning and Instructions
+            Column(
+              children: [
+                // Warning text (if any)
+                if (step.warningText != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lightbulb_outline, color: Colors.amber, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            step.warningText!,
+                            style: TextStyle(
+                              color: Colors.amber.shade100,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-          
-          // Instructions (if any)
-          if (step.instructions != null && !isGranted) ...[
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'How to enable:',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                
+                // Instructions (if any)
+                if (step.instructions != null && !isGranted) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...step.instructions!.asMap().entries.map((entry) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 24,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF7C3AED).withOpacity(0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${entry.key + 1}',
-                                style: const TextStyle(
-                                  color: Color(0xFF7C3AED),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'How to enable:',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        ...step.instructions!.asMap().entries.map((entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF7C3AED).withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      '${entry.key + 1}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF7C3AED),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    entry.value,
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.7),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              entry.value,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        ],
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            
+            // Bottom section - Buttons
+            Column(
+              children: [
+                const SizedBox(height: 20),
+                
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _handleButtonPress,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isGranted && !isFirstOrLast
+                          ? Colors.green
+                          : const Color(0xFF7C3AED),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  }),
+                      elevation: 0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isGranted && !isFirstOrLast) ...[
+                          const Icon(Icons.check, size: 20),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Permission Granted - Continue',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                        ] else ...[
+                          Text(
+                            step.buttonText,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                          if (!isFirstOrLast && index != _steps.length - 1) ...[
+                            const SizedBox(width: 8),
+                            const Icon(Icons.open_in_new, size: 18),
+                          ],
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Skip button (for non-essential permissions)
+                if (!isFirstOrLast && index != _steps.length - 1 && !isGranted) ...[
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: _skipStep,
+                    child: Text(
+                      'Skip for now',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
                 ],
-              ),
+                
+                const SizedBox(height: 16),
+              ],
             ),
           ],
-          
-          const Spacer(),
-          
-          // Buttons
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _handleButtonPress,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: isGranted && !isFirstOrLast
-                    ? Colors.green
-                    : const Color(0xFF7C3AED),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (isGranted && !isFirstOrLast) ...[
-                    const Icon(Icons.check, size: 20),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Permission Granted - Continue',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                  ] else ...[
-                    Text(
-                      step.buttonText,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    if (!isFirstOrLast && index != _steps.length - 1) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.open_in_new, size: 18),
-                    ],
-                  ],
-                ],
-              ),
-            ),
-          ),
-          
-          // Skip button (for non-essential permissions)
-          if (!isFirstOrLast && index != _steps.length - 1 && !isGranted) ...[
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: _skipStep,
-              child: Text(
-                'Skip for now',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ],
-          
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }
